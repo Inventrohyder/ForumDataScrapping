@@ -62,6 +62,7 @@ class Scrapper:
                 user_name = credentials['user']
                 user_pass = credentials['password']
         except FileNotFoundError:
+            logger.error("Credentials file not found")
             with open(self.credentials_file_name, 'w+') as credentials_file:
                 # For sure the file had nothing, therefore
                 user_name = str(input("Username: "))

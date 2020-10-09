@@ -24,7 +24,8 @@ def setup_logging():
 def main():
     setup_logging()
     forum_scrapper = ForumScrapper()
-    forum_scrapper.setup_hc_links()
+    # forum_scrapper.setup_hc_links()
+    forum_scrapper.setup_scores_file()
     time.sleep(10)
 
 

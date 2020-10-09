@@ -1,5 +1,6 @@
 import time
 
+import selenium.common.exceptions
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.support.wait import WebDriverWait
@@ -14,7 +15,7 @@ logger = logging.getLogger("Forum Scrapper")
 
 class ForumScrapper(Scrapper):
 
-    def __init__(self, forum_link="https://forum.minerva.kgi.edu"):
+    def __init__(self, forum_link: str = "https://forum.minerva.kgi.edu"):
         super().__init__(forum_link)
         logger.info('Logging you in')
         self.login()
@@ -58,7 +59,8 @@ class ForumScrapper(Scrapper):
         # accessing an element present when logged in
         self.wait_for('//*[@id="header"]/div/div[1]/div/section/div[2]/div/div/div[1]/div/div/div/span')
 
-    def setup_hc_links(self, hcs_link="https://forum.minerva.kgi.edu/app/outcome-index"):
+    def setup_hc_links(self, hcs_link: str = "https://forum.minerva.kgi.edu/app/outcome-index",
+                       hcs_file="hc_links.csv"):
         """
         Generate a file containing the links to the HCs
         :return: nothing
@@ -73,8 +75,76 @@ class ForumScrapper(Scrapper):
             hc = hc_link.split("/")[-1]
             links.append(hc_link)
             hcs.append(hc)
-        df = pd.DataFrame(data=[hcs,links])
+        df = pd.DataFrame(data=[hcs, links])
         df = df.transpose()
         df.columns = ["HC", "HC_Link"]
-        df.to_csv("hc_links.csv")
+        df.to_csv(hcs_file)
+        logger.info("Saved hc links into file")
+
+    def setup_scores_file(self, hcs_file: str = "hc_links.csv"):
+        try:
+            # Try to open the file in read mode
+            # if it doesn't exist it throws an exception
+            open(hcs_file)
+        except FileNotFoundError:
+            logger.error("HCS file not found")
+            self.setup_hc_links(hcs_file=hcs_file)
+        finally:
+            df = pd.read_csv(hcs_file)
+            self.__get_scores(hc_df=df)
+
+    def __get_scores(self, hc_df: pd.DataFrame, scores_file: str = "./.data/scores.csv"):
+        """
+        Navigates through each HC link and scrapes the scores
+        :param hc_df: The DataFrame containing the links
+        :return:
+        """
+        weight_elements = []
+        hcs = []
+        weights = []
+        dates = []
+        grades = []
+        for hc_row in hc_df.itertuples():
+            logger.info(f"Scraping HC data -> #{hc_row.HC}")
+            link = hc_row.HC_Link
+            self.driver.get(link)
+            # Wait for the page to load
+            self.wait_for('//*[@id="main-semantic-content"]/div/div/div/div/div/section[3]/div')
+
+            # Check if the HC has been used by waiting for a TimeoutException when finding the weight data
+            try:
+                # Scrape the weights
+                weight_elements = self.wait_for(
+                    '//*[@id="main-semantic-content"]/div/div/div/div/div/section[2]/div/div[3]/table/tbody/tr/td[4]')
+                for weight_element in weight_elements:
+                    weights.append(weight_element.text.strip("x"))
+            except selenium.common.exceptions.TimeoutException:
+                logger.error(f"#{hc_row.HC} has never been graded")
+                hcs.extend([hc_row.HC])
+                weights.append(0)
+                dates.append("Apr 1 2012")
+                grades.append(0)
+                continue
+
+            # The number of weights should be equal to the number of dates and grades
+            # Therefore add the same number of hcs so that a table can be made of
+            # all of the variables
+            hcs.extend([hc_row.HC] * len(weight_elements))
+
+            # Scrape the dates
+            date_elements = self.wait_for(
+                '//*[@id="main-semantic-content"]/div/div/div/div/div/section[2]/div/div[3]/table/tbody/tr/td[5]')
+            for date_element in date_elements:
+                dates.append(date_element.text.strip())
+
+            # Scrape the grades
+            grade_elements = self.wait_for(
+                '//*[@id="main-semantic-content"]/div/div/div/div/div/section[2]/div/div[3]/table/tbody/tr/td[6]')
+            for grade_element in grade_elements:
+                grades.append(grade_element.text.strip())
+
+        df = pd.DataFrame(data=[hcs, weights, dates, grades])
+        df = df.transpose()
+        df.columns = ["HC", "HC_Weight", "HC_Date", "HC_Grade"]
+        df.to_csv(scores_file)
         logger.info("Saved hc links into file")
