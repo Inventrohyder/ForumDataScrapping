@@ -7,21 +7,25 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as ec
 from selenium.webdriver.support.wait import WebDriverWait
 
+import logging
+
+logger = logging.getLogger("Forum Scrapper")
+
 
 class Scrapper:
     def __init__(self, url, credentials_file_name='.credentials.json'):
-        print('Opening Browser')
+        logger.info('Opening Browser')
         self.driver = webdriver.Chrome("./chromedriver")
-        print('Browser opened')
+        logger.info('Browser opened')
         self.credentials_file_name = credentials_file_name
-        print('Navigating to', url)
+        logger.info(f'Navigating to {url}')
         self.driver.get(url)
-        print(url, 'navigated successfully')
+        logger.info(f'{url} navigated successfully')
 
     def __del__(self):
-        print('Closing Browser')
+        logger.info('Closing Browser')
         self.driver.quit()
-        print('Browser closed')
+        logger.info('Browser closed')
 
     def wait_for(self, text, delay=10, by=By.XPATH, check_again_limit=3, one_as_list=True):
         check = 0
@@ -42,8 +46,14 @@ class Scrapper:
                 return elements[0]
         return elements
 
-    # Logging in function
     def login_info(self):
+        """
+        Gets the user's log in information from the command line
+        or from a file.
+        The first use of the command line creates a file and saves
+        the information for faster runtimes in the future.
+        :return: a tuple consisting of the user_name, password
+        """
         try:
             # Try to open the file in read mode
             # if it doesn't exist it throws an exception
